@@ -1,0 +1,32 @@
+{
+    "name": "ijortengab/configuration-editor",
+    "description": "Easy way to edit configuration file.",
+    "type": "library",
+    "license": "GPL",
+    "authors": [
+        {
+            "name": "IjorTengab",
+            "email": "m_roji28@yahoo.com",
+            "homepage": "http://github.com/ijortengab"
+        }
+    ],
+    "require": {
+        "psr/log": "^1.0",
+        "ijortengab/tools": "master",
+        "ijortengab/parse-ini": "master"
+    },
+    "autoload": {
+        "psr-4": {"IjorTengab\\ConfigurationEditor\\": "src/ConfigurationEditor/"}
+    },
+    "minimum-stability": "dev",
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/ijortengab/parse-ini"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/ijortengab/tools"
+        }
+    ]
+}

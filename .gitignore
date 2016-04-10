@@ -1,0 +1,8 @@
+vendor/
+test
+test.txt
+test.php
+test.ini
+composer.phar
+composer.lock
+TODO.md
