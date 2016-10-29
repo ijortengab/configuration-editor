@@ -13,20 +13,32 @@
     "require": {
         "psr/log": "^1.0",
         "ijortengab/tools": "master",
-        "ijortengab/parse-ini": "master"
+        "ijortengab/parse-ini": "master",
+        "ijortengab/parse-yaml": "master"
+    },
+    "require-dev": {
+        "ijortengab/logger": "master"
     },
     "autoload": {
-        "psr-4": {"IjorTengab\\ConfigurationEditor\\": "src/ConfigurationEditor/"}
+        "psr-4": {"IjorTengab\\": "src/"}
     },
     "minimum-stability": "dev",
     "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/ijortengab/tools"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/ijortengab/logger"
+        },
         {
             "type": "vcs",
             "url": "https://github.com/ijortengab/parse-ini"
         },
         {
             "type": "vcs",
-            "url": "https://github.com/ijortengab/tools"
+            "url": "https://github.com/ijortengab/parse-yaml"
         }
     ]
 }

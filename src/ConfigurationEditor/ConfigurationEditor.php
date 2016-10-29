@@ -20,7 +20,7 @@ class ConfigurationEditor
     /**
      * Object yang mengimplements FormatInterface.
      */
-    public $handler;
+    protected $handler;
 
     /**
      * Informasi path filename.
@@ -67,6 +67,11 @@ class ConfigurationEditor
      */
     public function __destruct()
     {
+        // $auto_save = $this->auto_save;
+        // $has_changed = $this->has_changed;
+        // $debugname = 'auto_save'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
+        // $debugname = 'has_changed'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
+        
         if ($this->auto_save && $this->has_changed) {
             $this->handler->saveData();
         }
@@ -105,7 +110,7 @@ class ConfigurationEditor
     /**
      * Menyimpan konfigurasi kedalam file.
      */
-    public function save()
+    public function saveData()
     {
         $this->has_changed = false;
         return $this->handler->saveData();
@@ -114,7 +119,7 @@ class ConfigurationEditor
     /**
      * Mendapatkan data.
      */
-    public function get($key = null)
+    public function getData($key = null)
     {
         return $this->handler->getData($key);
     }
@@ -122,7 +127,7 @@ class ConfigurationEditor
     /**
      * Mengeset data.
      */
-    public function set($key, $value)
+    public function setData($key, $value)
     {
         $this->has_changed = true;
         $this->handler->setData($key, $value);
@@ -132,7 +137,7 @@ class ConfigurationEditor
     /**
      * Menghapus data.
      */
-    public function del($key)
+    public function delData($key)
     {
         $this->has_changed = true;
         $this->handler->delData($key);
@@ -157,7 +162,7 @@ class ConfigurationEditor
         if (!isset($info['format'])) {
             $ext = pathinfo($info['filename'], PATHINFO_EXTENSION);
             if (empty($ext)) {
-                throw new \InvalidAgumentException('Extension unknown.');
+                throw new InvalidAgumentException('Extension unknown.');
             }
             $info['format'] = $ext;
         }
@@ -170,5 +175,13 @@ class ConfigurationEditor
     }
 
 
+    
+    /**
+     * Devel only.
+     */
+    public function getHandlerProperty($what)
+    {
+        return $this->handler->getProperty($what); 
+    }
 
 }
