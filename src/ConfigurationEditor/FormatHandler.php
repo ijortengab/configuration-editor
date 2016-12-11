@@ -48,9 +48,4 @@ class FormatHandler
         }
         throw new \InvalidArgumentException('Format not supported.');
     }
-
-
-
-
-
 }

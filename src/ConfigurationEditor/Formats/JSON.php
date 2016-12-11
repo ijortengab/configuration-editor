@@ -7,6 +7,4 @@ use IjorTengab\ParseJSON;
 
 class JSON implements FormatInterface
 {
-
-
 }

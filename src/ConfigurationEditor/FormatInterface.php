@@ -9,17 +9,27 @@ interface FormatInterface
     /**
      *
      */
-    public function setFileName($filename);
+    public function __toString();
 
     /**
      *
      */
-    public function getFileName();
+    public function setFile($filename);
+
+    /**
+     *
+     */
+    public function getFile();
 
     /**
      *
      */
     public function setData($key, $value);
+
+    /**
+     *
+     */
+    public function setArrayData(Array $array);
 
     /**
      *
@@ -34,7 +44,7 @@ interface FormatInterface
     /**
      *
      */
-    public function saveData();
+    public function save();
 
     /**
      *
@@ -45,6 +55,4 @@ interface FormatInterface
      *
      */
     public function getLog();
-
-
 }

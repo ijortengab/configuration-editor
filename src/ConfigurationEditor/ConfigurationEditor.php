@@ -23,11 +23,6 @@ class ConfigurationEditor
     protected $handler;
 
     /**
-     * Informasi path filename.
-     */
-    protected $filename;
-
-    /**
      * Penanda apakah akan dilakukan autosave atau tidak. Autosave akan berjalan
      * bila object destruct atau eksekusi PHP Script telah selesai.
      */
@@ -47,7 +42,6 @@ class ConfigurationEditor
     {
         // Handler must implements FormatInterface.
         $this->handler = $handler;
-        $this->filename = $handler->getFileName();
 
         // Log must implements LoggerInterface;
         if (null === $log) {
@@ -67,14 +61,17 @@ class ConfigurationEditor
      */
     public function __destruct()
     {
-        // $auto_save = $this->auto_save;
-        // $has_changed = $this->has_changed;
-        // $debugname = 'auto_save'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
-        // $debugname = 'has_changed'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
-        
         if ($this->auto_save && $this->has_changed) {
-            $this->handler->saveData();
+            $this->handler->save();
         }
+    }
+
+    /**
+     *
+     */
+    public function __toString()
+    {
+        return $this->handler->__toString();
     }
 
     /**
@@ -98,22 +95,17 @@ class ConfigurationEditor
      */
     public function autoSave($toggle)
     {
-        if ($toggle && is_writable($this->filename)) {
-            $this->auto_save = true;
-        }
-        else {
-            $this->auto_save = false;
-        }
+        $this->auto_save = $toggle;
         return $this;
     }
 
     /**
      * Menyimpan konfigurasi kedalam file.
      */
-    public function saveData()
+    public function save()
     {
         $this->has_changed = false;
-        return $this->handler->saveData();
+        return $this->handler->save();
     }
 
     /**
@@ -135,6 +127,16 @@ class ConfigurationEditor
     }
 
     /**
+     * Mengeset array data.
+     */
+    public function setArrayData(Array $array)
+    {
+        $this->has_changed = true;
+        $this->handler->setArrayData($array );
+        return $this;
+    }
+
+    /**
      * Menghapus data.
      */
     public function delData($key)
@@ -149,18 +151,18 @@ class ConfigurationEditor
      * Jika gagal dikenali formatnya, maka akan dilempar ke
      * \InvalidArgumentException.
      */
-    public static function load($filename, LoggerInterface $log = null)
+    public static function load($mixed, LoggerInterface $log = null)
     {
-        if (is_array($filename)) {
-            $info = $filename;
+        if (is_array($mixed)) {
+            $info = $mixed;
         }
         else {
-            $info = ['filename' => $filename];
+            $info = ['file' => $mixed];
         }
 
         // Cari format (dalam hal ini adalah extensi dari file).
         if (!isset($info['format'])) {
-            $ext = pathinfo($info['filename'], PATHINFO_EXTENSION);
+            $ext = pathinfo($info['file'], PATHINFO_EXTENSION);
             if (empty($ext)) {
                 throw new InvalidAgumentException('Extension unknown.');
             }
@@ -170,18 +172,7 @@ class ConfigurationEditor
         $format = strtolower($info['format']);
         FormatHandler::init();
         $handler = FormatHandler::getInstance($format);
-        $handler->setFileName($info['filename']);
+        $handler->setFile($info['file']);
         return new self($handler, $log);
     }
-
-
-    
-    /**
-     * Devel only.
-     */
-    public function getHandlerProperty($what)
-    {
-        return $this->handler->getProperty($what); 
-    }
-
 }

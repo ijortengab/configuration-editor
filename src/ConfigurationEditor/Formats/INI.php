@@ -15,7 +15,7 @@ use Psr\Log\LoggerInterface;
  */
 class INI extends ParseINI implements FormatInterface
 {
-    protected $filename;
+    protected $file;
 
     protected $last_line;
 
@@ -23,6 +23,12 @@ class INI extends ParseINI implements FormatInterface
 
     protected $max_value_of_sequence = [];
 
+    /**
+     * Daftar
+     * Mengubah [], menjadi [0], [1]
+     * yang diakibatkan oleh adanya set data yang langsung ke numeric
+     * yang dituju, seperti ->setData('blablabla[100]', 'a')
+     */
     protected $convert_sequence_to_mapping = [];
 
     /**
@@ -32,13 +38,32 @@ class INI extends ParseINI implements FormatInterface
     public $data;
 
     /**
+     *
+     */
+    public function __toString()
+    {
+
+        return $this->raw;
+    }
+
+    /**
      * {@inheritdoc}
      */
-    public function setFileName($filename)
+    public function setFile($file)
     {
-        if (is_readable($filename)) {
-            $this->filename = $filename;
-            $this->raw = file_get_contents($filename);
+        if (is_string($file) && is_readable($file)) {
+            $this->file = $file;
+            $this->raw = file_get_contents($file);
+            return $this;
+        }
+        elseif (is_resource($file)) {
+            $meta = stream_get_meta_data($file);
+            $stat = fstat($file);
+            if (is_readable($meta['uri'])) {
+                fseek($file, 0);
+                $this->file = $file;
+                $this->raw = ($stat['size'] > 0) ? fread($file, $stat['size']) : '';
+            }
             return $this;
         }
         throw new InvalidArgumentException('File not readable.');
@@ -47,9 +72,9 @@ class INI extends ParseINI implements FormatInterface
     /**
      * {@inheritdoc}
      */
-    public function getFileName()
+    public function getFile()
     {
-        return $this->filename;
+        return $this->file;
     }
 
     /**
@@ -114,6 +139,13 @@ class INI extends ParseINI implements FormatInterface
     }
 
     /**
+     *
+     */
+    public function setArrayData(Array $array)
+    {
+        // todo.
+    }
+    /**
      * {@inheritdoc}
      */
     public function getData($key = null)
@@ -134,7 +166,8 @@ class INI extends ParseINI implements FormatInterface
         if (false === $this->has_parsed) {
             $this->parse();
         }
-
+        // todo: jika kita delete angka terakhir, maka perhatikan apakah max value of suquence harusnya
+        // juga disesuaikan.
         if (isset($this->keys[$key])) {
             // Khusus delete $key key[subkey][numeric]
             // Maka perlu flag untuk convert_sequence_to_mapping
@@ -162,14 +195,24 @@ class INI extends ParseINI implements FormatInterface
     /**
      * {@inheritdoc}
      */
-    public function saveData()
+    public function save()
     {
         $this->updateKeyInSegmen();
         $this->updateValueInSegmen();
         $this->rebuildRaw();
-        // Kita tidak perlu mengecek lagi tentang is_writable, karena hal ini
-        // sudah dicek di ConfigurationEditor::autoSave.
-        file_put_contents($this->filename, $this->raw);
+        if (is_string($this->file) && is_writable($this->file)) {
+            file_put_contents($this->file, $this->raw);
+            return true;
+        }
+        elseif (is_resource($this->file)) {
+            $meta = stream_get_meta_data($this->file);
+            if (is_writable($meta['uri'])) {
+                fseek($this->file, 0);
+                fwrite($this->file, $this->raw);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

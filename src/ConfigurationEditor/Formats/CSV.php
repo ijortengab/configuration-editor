@@ -7,6 +7,4 @@ use IjorTengab\ParseCSV;
 
 class CSV implements FormatInterface
 {
-
-
 }
