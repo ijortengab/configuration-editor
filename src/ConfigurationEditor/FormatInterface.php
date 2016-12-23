@@ -14,7 +14,12 @@ interface FormatInterface
     /**
      *
      */
-    public function setFile($filename);
+    public function setFile($file);
+
+    /**
+     *
+     */
+    public function readFile();
 
     /**
      *

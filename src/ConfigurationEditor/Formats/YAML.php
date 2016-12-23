@@ -17,7 +17,7 @@ class YAML extends ParseYAML implements FormatInterface
 {
     protected $file;
 
-    protected $last_line;
+    protected $last_line = 0;
 
     protected $log;
 
@@ -50,22 +50,29 @@ class YAML extends ParseYAML implements FormatInterface
      */
     public function setFile($file)
     {
-        if (is_string($file) && is_readable($file)) {
-            $this->file = $file;
-            $this->raw = file_get_contents($file);
+        $this->file = $file;
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function readFile()
+    {
+        if (is_string($this->file) && is_readable($this->file)) {
+            $this->raw = file_get_contents($this->file);
             return $this;
         }
-        elseif (is_resource($file)) {
-            $meta = stream_get_meta_data($file);
-            $stat = fstat($file);
+        elseif (is_resource($this->file)) {
+            $meta = stream_get_meta_data($this->file);
+            $stat = fstat($this->file);
             if (is_readable($meta['uri'])) {
-                fseek($file, 0);
-                $this->file = $file;
-                $this->raw = ($stat['size'] > 0) ? fread($file, $stat['size']) : '';
+                fseek($this->file, 0);
+                $this->raw = ($stat['size'] > 0) ? fread($this->file, $stat['size']) : '';
             }
             return $this;
         }
-        throw new InvalidArgumentException('File not readable.');
+        throw new RuntimeException('File not readable.');
     }
 
     /**
@@ -92,7 +99,7 @@ class YAML extends ParseYAML implements FormatInterface
         }
         $old_key = $key;
 
-        $this->processBeforeSetData($key, $array_type, $dimension, $key_parent);
+        $this->processBeforeSetDataSequence($key, $array_type, $dimension, $key_parent);
 
         if (array_key_exists($key, $this->keys)) {
             $this->keys[$key]['changed'] = true;
@@ -216,10 +223,13 @@ class YAML extends ParseYAML implements FormatInterface
      */
     public function save()
     {
-        // $this->updateKeyInSegmen();
+        $this->updateKeyInSegmen();
         $this->updateValueInSegmen();
         $this->rebuildRaw();
-        if (is_string($this->file) && is_writable($this->file)) {
+        if (is_string($this->file)) {
+            if (file_exists($this->file) && !is_writable($this->file)) {
+                return false;
+            }
             file_put_contents($this->file, $this->raw);
             return true;
         }
@@ -387,7 +397,7 @@ class YAML extends ParseYAML implements FormatInterface
      * Memperbaiki nilai $key yang memiliki suffix "[]", dsb.
      * sebelum dimasukkan kedalam property $keys.
      */
-    protected function processBeforeSetData(&$key, &$array_type, &$dimension, &$key_parent)
+    protected function processBeforeSetDataSequence(&$key, &$array_type, &$dimension, &$key_parent)
     {
         if ($key == '[]') {
             $array_type = 'indexed';

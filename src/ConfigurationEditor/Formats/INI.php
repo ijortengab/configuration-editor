@@ -4,6 +4,7 @@ namespace IjorTengab\ConfigurationEditor\Formats;
 
 use IjorTengab\ParseINI\ParseINI;
 use IjorTengab\ConfigurationEditor\FormatInterface;
+use IjorTengab\ConfigurationEditor\RuntimeException;
 use IjorTengab\Tools\Functions\ArrayHelper;
 use Psr\Log\LoggerInterface;
 
@@ -17,7 +18,7 @@ class INI extends ParseINI implements FormatInterface
 {
     protected $file;
 
-    protected $last_line;
+    protected $last_line = 0;
 
     protected $log;
 
@@ -51,22 +52,29 @@ class INI extends ParseINI implements FormatInterface
      */
     public function setFile($file)
     {
-        if (is_string($file) && is_readable($file)) {
-            $this->file = $file;
-            $this->raw = file_get_contents($file);
+        $this->file = $file;
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function readFile()
+    {
+        if (is_string($this->file) && is_readable($this->file)) {
+            $this->raw = file_get_contents($this->file);
             return $this;
         }
-        elseif (is_resource($file)) {
-            $meta = stream_get_meta_data($file);
-            $stat = fstat($file);
+        elseif (is_resource($this->file)) {
+            $meta = stream_get_meta_data($this->file);
+            $stat = fstat($this->file);
             if (is_readable($meta['uri'])) {
-                fseek($file, 0);
-                $this->file = $file;
-                $this->raw = ($stat['size'] > 0) ? fread($file, $stat['size']) : '';
+                fseek($this->file, 0);
+                $this->raw = ($stat['size'] > 0) ? fread($this->file, $stat['size']) : '';
             }
             return $this;
         }
-        throw new InvalidArgumentException('File not readable.');
+        throw new RuntimeException('File not readable.');
     }
 
     /**
@@ -85,45 +93,81 @@ class INI extends ParseINI implements FormatInterface
         if (false === $this->has_parsed) {
             $this->parse();
         }
-        $array_type = 'associative';
+        // Prepare.
         if ($key === []) {
             $key = '[]';
         }
+        $array_type = 'associative';
+        $key_parent = '';
+        $keys_deleted = [];
         $old_key = $key;
 
         // Perbaiki nilai $key sebelum dimasukkan ke $this->keys,
         // sekaligus menyesuaikan nilai $this->max_value_of_sequence
         // bagi key yang sequence, juga menyesuaikan nilai dari
         // $this->convert_sequence_to_mapping bagi key tertentu.
-        $this->processBeforeSetData($key, $array_type);
+        $this->modifyKey($key, $array_type, $key_parent);
 
-        // Setelah $key diubah, cek apakah telah exists di property $keys.
-        // Jika tidak ada, maka kita perlu menambah juga di property $segmen.
-        if (array_key_exists($key, $this->keys)) {
-            $this->keys[$key]['changed'] = true;
-            $this->keys[$key]['value'] = $value;
-        }
-        else {
-            $last_line = $this->last_line;
-            // Last line harus ada eol, jika tidak ada, maka paksa tambah.
-            if (!isset($this->segmen[$last_line]['eol'])) {
-                $this->segmen[$last_line]['eol'] = "\n";
+        do {
+            if (array_key_exists($key, $this->keys)) {
+                $this->keys[$key]['changed'] = true;
+                $this->keys[$key]['value'] = $value;
+                break;
             }
-            $next_line = ++$this->last_line;
-            // Gunakan $old_key pada segmen, jadi meski
-            // key telah berubah menjadi aa[0], maka pada segmen
-            // kita tetap menggunakan aa[].
-            $this->segmen[$next_line] = [
+
+            $this->populateKeysDeleted($key, $keys_deleted);
+            $this->populateParentKeyThatExists($key, $key_parent, $keys_deleted);
+            $this->deleteKeys($keys_deleted);
+
+            $key_above = $this->getKeyThatExactlyAbove($key_parent);
+            if (null === $key_above) {
+                if (0 !== $this->last_line) {
+                    $this->addEolLastLine();
+                }
+                $next_line = ++$this->last_line;
+                $this->segmen[$next_line] = [
+                    'key' => $old_key,
+                    'eol' => "\n"
+                ];
+                $this->keys[$key] = [
+                    'line' => $next_line,
+                    'value' => $value,
+                    'array_type' => $array_type,
+                    'changed' => true,
+                ];
+                break;
+            }
+
+            $line_above = $this->keys[$key_above]['line'];
+
+            // Contoh pada kasus:
+            // ```ini
+            // entahlah = oke
+            // benarkah[kita][bisa] = ya
+            // ```
+            // $config->setData('benarkah[kita][semangat]', 'ho oh');
+            // maka perlu ditambah eol pada last line.
+            if ($this->last_line === $line_above) {
+                $this->addEolLastLine();
+            }
+            $line_new = $line_above + 1;
+            $this->modifySegmenPosition($line_new);
+            $new_segmen = [ $line_new => [
                 'key' => $old_key,
                 'eol' => "\n"
-            ];
-            $this->keys[$key] = [
-                'line' => $next_line,
+            ]];
+            ArrayHelper::elementEditor($this->segmen, 'insert', 'after', $line_above, $new_segmen);
+            $this->modifyKeysPosition($line_new);
+            $new_keys = [ $key => [
+                'line' => $line_new,
                 'value' => $value,
                 'array_type' => $array_type,
                 'changed' => true,
-            ];
-        }
+            ]];
+            ArrayHelper::elementEditor($this->keys, 'insert', 'after', $key_above, $new_keys);
+            // Rebuild last line.
+            $this->populateLastLine();
+        } while (false);
 
         // Masukkan ke property $data.
         // Jika $value === null, maka kita tidak bisa menggunakan
@@ -168,7 +212,7 @@ class INI extends ParseINI implements FormatInterface
         }
         // todo: jika kita delete angka terakhir, maka perhatikan apakah max value of suquence harusnya
         // juga disesuaikan.
-        if (isset($this->keys[$key])) {
+        if (array_key_exists($key, $this->keys)) {
             // Khusus delete $key key[subkey][numeric]
             // Maka perlu flag untuk convert_sequence_to_mapping
             if (preg_match('/(.*)\[(\d+)\]$/', $key, $m)) {
@@ -189,6 +233,13 @@ class INI extends ParseINI implements FormatInterface
             // Clear data.
             $this->data($key, null);
         }
+        else {
+            $keys_deleted = [];
+            $this->populateKeysDeleted($key, $keys_deleted);
+            $this->deleteKeys($keys_deleted);
+            // $debugname = 'keys_deleted'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
+
+        }
         return $this;
     }
 
@@ -200,7 +251,10 @@ class INI extends ParseINI implements FormatInterface
         $this->updateKeyInSegmen();
         $this->updateValueInSegmen();
         $this->rebuildRaw();
-        if (is_string($this->file) && is_writable($this->file)) {
+        if (is_string($this->file)) {
+            if (file_exists($this->file) && !is_writable($this->file)) {
+                return false;
+            }
             file_put_contents($this->file, $this->raw);
             return true;
         }
@@ -391,7 +445,7 @@ class INI extends ParseINI implements FormatInterface
     /**
      *
      */
-    protected function processBeforeSetData(&$key, &$array_type)
+    protected function modifyKey(&$key, &$array_type, &$key_parent)
     {
         if ($key == '[]') {
             $array_type = 'indexed';
@@ -449,6 +503,7 @@ class INI extends ParseINI implements FormatInterface
         elseif (preg_match('/(.*)\[([^\[\]]*)\]$/', $key, $m)) {
             if ($m[2] == '') {
                 $array_type = 'indexed';
+                $key_parent = $m[1];
                 $_key = $m[0];
                 if (array_key_exists($_key, $this->max_value_of_sequence)) {
                     $c = ++$this->max_value_of_sequence[$_key];
@@ -528,6 +583,184 @@ class INI extends ParseINI implements FormatInterface
                 return true;
             default:
                 return false;
+        }
+    }
+
+    /**
+     *
+     */
+    protected function addEolLastLine()
+    {
+        $last_line = $this->last_line;
+        if (!isset($this->segmen[$last_line]['eol'])) {
+            $this->segmen[$last_line]['eol'] = "\n";
+        }
+    }
+
+    /**
+     *
+
+Misalnya:
+kita punya ini
+country[name][fullname][internationalname][un] = Indonesia
+country[name][fullname][internationalname][asean] = Negara Indonesia
+lalu saat kita mengeset
+$config->setData('country[name][fullname][localname][dahsyat]', 'Dahsyat Indonesia');
+maka key_parent akan terpopulate yakni: country[name][fullname]
+// tapi jika
+kita punya ini
+country = Indonesia ;This is inline comment.
+dan kita set
+$config->setData('country[name][fullname][localname][dahsyat]', 'Dahsyat Indonesia');
+justru
+$key_parent = '';
+dan
+$keys_deleted[] = 'country'
+karena tidak bisa kalo key parent nya adalah non array.
+
+     */
+    protected function populateParentKeyThatExists($key, &$key_parent, &$keys_deleted)
+    {
+        // $keys = $this->keys;
+        // $debugname = 'keys'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
+
+        $parts = preg_split('/\]?\[/', rtrim($key, ']'));
+        $parents = [];
+        array_pop($parts);
+        while ($last = array_pop($parts)) {
+            $parent = '';
+            empty($parts) or $parent = implode('][', $parts) . '][';
+            $parent .= $last;
+            // Memperbaiki dari "country][name][fullname][localname"
+            // menjadi "country[name][fullname][localname]"
+            $parent = preg_replace_callback('/^([^\]\[]+)\]\[(.+)/', function ($matches) {
+                return $matches[1] . '[' . $matches[2] . ']';
+            }, $parent);
+            $parents[] = $parent;
+        }
+
+        foreach ($parents as $parent) {
+            $value = $this->data($parent);
+            if (null === $value) {
+                continue;
+            }
+            elseif (is_array($value)) {
+                $key_parent = $parent;
+                break;
+            }
+            else {
+                $keys_deleted = array_merge($keys_deleted, (array) $parent);
+                break;
+            }
+        }
+
+    }
+
+    /**
+     * Contoh, misalnya:
+     *
+country[name][fullname][internationalname][un] = Indonesia
+country[name][fullname][internationalname][asean] = Negara Indonesia
+maka saat akan mengeset
+$config->setData('country[name]', 'Indonesia');
+maka
+country[name][fullname][internationalname][un] = Indonesia
+country[name][fullname][internationalname][asean] = Negara Indonesia
+akan di delete karena sudah tidak lagi relevan.
+     */
+    protected function populateKeysDeleted($key, &$keys_deleted)
+    {
+        $pattern = '/^' . preg_quote($key) . '\[/';
+        $inside = ArrayHelper::filterKeyPattern($this->keys, $pattern);
+        if (!empty($inside)) {
+            $keys_deleted = array_merge($keys_deleted, array_keys($inside));
+        }
+    }
+
+    /**
+     *
+     */
+    protected function getKeyThatExactlyAbove($key_parent)
+    {
+        if ($key_parent === '') {
+            return;
+        }
+        $data = $this->data;
+        // $debugname = 'data'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
+
+        // $debugname = 'key_parent'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
+        // return;
+        $children = $this->getData($key_parent);
+        // $debugname = 'children'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
+        $flat = ArrayHelper::dimensionalSimplify($children);
+        $line = 0;
+        $found = null;
+        foreach ($flat as $key => $value) {
+            // Ubah dari "aa" menjadi "[aa]"
+            // dan dari "aa[bb]" menjadi "[aa][bb]".
+            $key = rtrim($key, ']') . ']';
+            $key = preg_replace('/[\[]/', '][', $key, 1);
+            $key = '[' . $key;
+            // Tambah prefix.
+            $key = $key_parent . $key;
+            // pada kasus tertentu,
+            // $debugname = 'key'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
+            if ($info = $this->keys[$key]) {
+                if ($line < $info['line']) {
+                    $found = $key;
+                    $line = $info['line'];
+                }
+            }
+
+            // $debugname = 'info'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
+
+        }
+        // $debugname = 'found'; echo "\r\n<pre>" . __FILE__ . ":" . __LINE__ . "\r\n". 'var_dump(' . $debugname . '): '; var_dump($$debugname); echo "</pre>\r\n";
+
+
+        return $found;
+        // $children_key = key($children);
+        // $children_value = current($children);
+        // $flat = ArrayHelper::dimensionalSimplify([$children_key => $children_value]);
+
+
+    }
+
+    /**
+     *
+     */
+    protected function modifySegmenPosition($int)
+    {
+        // Segmen.
+        $segmen_keys = array_keys($this->segmen);
+        $segmen_values = array_values($this->segmen);
+        foreach ($segmen_keys as &$info) {
+            if ($info >= $int) {
+               $info++;
+           }
+        }
+        $this->segmen = array_combine($segmen_keys, $segmen_values);
+    }
+
+    /**
+     *
+     */
+    protected function modifyKeysPosition($int)
+    {
+        foreach ($this->keys as &$info) {
+           if ($info['line'] >= $int) {
+               $info['line']++;
+           }
+        }
+    }
+
+    /**
+     *
+     */
+    protected function deleteKeys($keys_deleted)
+    {
+        foreach ($keys_deleted as $key) {
+            $this->delData($key);
         }
     }
 }

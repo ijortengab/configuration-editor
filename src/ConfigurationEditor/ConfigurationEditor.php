@@ -83,6 +83,14 @@ class ConfigurationEditor
     }
 
     /**
+     * Mengambil info file.
+     */
+    public function getFile()
+    {
+       return $this->handler->getFile();
+    }
+
+    /**
      * Todo.
      */
     public function condition($condition)
@@ -109,6 +117,29 @@ class ConfigurationEditor
     }
 
     /**
+     * Simpan data ke file baru.
+     */
+    public function saveAs($new_path)
+    {
+        if (!is_string($new_path)) {
+            return false;
+        }
+        $current_file = $this->handler->getFile();
+
+        if (is_string($current_file) || null === $current_file) {
+            $this->handler->setFile($new_path);
+            $this->has_changed = false;
+            return $this->handler->save();
+        }
+        elseif (is_resource($current_file)) {
+            fseek($current_file, 0);
+            $this->handler->setFile($new_path);
+            $this->has_changed = false;
+            return $this->handler->save();
+        }
+    }
+
+    /**
      * Mendapatkan data.
      */
     public function getData($key = null)
@@ -132,7 +163,7 @@ class ConfigurationEditor
     public function setArrayData(Array $array)
     {
         $this->has_changed = true;
-        $this->handler->setArrayData($array );
+        $this->handler->setArrayData($array);
         return $this;
     }
 
@@ -173,6 +204,7 @@ class ConfigurationEditor
         FormatHandler::init();
         $handler = FormatHandler::getInstance($format);
         $handler->setFile($info['file']);
+        $handler->readFile();
         return new self($handler, $log);
     }
 }
