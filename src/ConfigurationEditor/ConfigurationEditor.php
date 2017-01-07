@@ -178,6 +178,16 @@ class ConfigurationEditor
     }
 
     /**
+     * Menghapus keseluruhan data.
+     */
+    public function clear()
+    {
+        $this->has_changed = true;
+        $this->handler->clear();
+        return $this;
+    }
+
+    /**
      * Shortcut untuk membuat instance.
      * Jika gagal dikenali formatnya, maka akan dilempar ke
      * \InvalidArgumentException.
