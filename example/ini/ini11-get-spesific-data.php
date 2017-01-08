@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Example: Create Simple Data.
+ * Example: Get Spesific Data.
  *
  * Attention: Run ```composer install``` first before execute this file.
  * @see: example/README.md

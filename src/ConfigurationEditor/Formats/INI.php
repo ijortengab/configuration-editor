@@ -330,6 +330,7 @@ class INI extends ParseINI implements FormatInterface
         foreach ($array as $key => $value) {
             $this->setData($key, $value);
         }
+        return $this;
     }
 
     /**
@@ -582,7 +583,8 @@ class INI extends ParseINI implements FormatInterface
                 $key_square = key($list);
                 $key = substr($key_square, 0, -2);
                 // Skip jika urut sesuai penjelasan diatas.
-                if (ArrayHelper::isIndexedKeySorted($this->data($key))) {
+                $array = $this->data($key);
+                if (null !== $array && ArrayHelper::isIndexedKeySorted($array)) {
                     continue;
                 }
                 if ($key === '') {
@@ -661,7 +663,7 @@ class INI extends ParseINI implements FormatInterface
             }
             // Set in raw.
             $_raw = '';
-            $position = explode(' ', 'key_prepend key key_append separator value_prepend quote_value value quote_value comment eol');
+            $position = explode(' ', 'key_prepend key key_append separator value_prepend quote_value value quote_value value_append comment eol');
             array_walk($position, function ($val) use ($segmen, &$_raw) {
                 $_raw .= $segmen[$val];
             });
@@ -689,13 +691,13 @@ class INI extends ParseINI implements FormatInterface
     protected function processSequence(&$old_key, &$key, &$array_type, &$key_parent)
     {
         if ($key === '[]') {
-            $sequence_type = 'empty';
+            $key_type = 'empty';
             $array_type = 'indexed';
             // $int = ...; // Continue.
             $key_square = '[]';
         }
         elseif (is_numeric($key)) {
-            $sequence_type = 'numeric';
+            $key_type = 'numeric';
             // $array_type = '...'; // Continue.
             $int = $key;
             $key_square = '[]';
@@ -703,13 +705,13 @@ class INI extends ParseINI implements FormatInterface
         elseif (preg_match('/(.*)\[([^\[\]]*)\]$/', $key, $m)) {
             $key_parent = $m[1];
             if ($m[2] == '') {
-                $sequence_type = 'empty';
+                $key_type = 'empty';
                 $array_type = 'indexed';
                 // $int = ...; // Continue.
                 $key_square = $key_parent . '[]';
             }
             elseif (is_numeric($m[2])) {
-                $sequence_type = 'numeric';
+                $key_type = 'numeric';
                 // $array_type = '...'; // Continue.
                 $int = $m[2];
                 $key_square = $key_parent . '[]';
@@ -721,17 +723,16 @@ class INI extends ParseINI implements FormatInterface
         else {
             return;
         }
-        switch ($sequence_type) {
+
+        // Populate $int.
+        switch ($key_type) {
             case 'empty':
                 // Ubah $key.
+                $int = 0;
                 if (array_key_exists($key_square, $this->max_value_of_sequence)) {
-                    $c = ++$this->max_value_of_sequence[$key_square];
+                    $int = $this->max_value_of_sequence[$key_square] + 1;
                 }
-                else {
-                    $c = $this->max_value_of_sequence[$key_square] = 0;
-                }
-                // Populate $int.
-                $key = $int = $c;
+                $key = $int;
                 empty($key_parent) or $key = $key_parent . '[' . $c . ']';
                 break;
 
@@ -761,41 +762,45 @@ class INI extends ParseINI implements FormatInterface
                 break;
         }
         if ($array_type == 'indexed') {
+            // Modifikaksi argument $oldkey serta set convert ke mapping
+            // jika diperlukan.
+            //
+            // Pada kasus.
+            // ```
+            // aa[] = 00
+            // aa[] = 11
+            // aa[] = 22
+            // ```
+            // $config->delData('aa[2]');
+            // $config->setData('aa[2]', '...');
+            // mengakibatkan menjadi
+            // ```
+            // aa[] = 11
+            // aa[] = 22
+            // aa[2] = ...
+            // ```
+            // Oleh karena itu, jika key yang diset adalah
+            // key terakhir, maka ubah oldkey yang akan ditempatkan
+            // di segman.
+            // sehingga segmen yang terbentuk nantinya seperti ini.
+            // ```
+            // aa[] = 11
+            // aa[] = 22
+            // aa[] = ...
             do {
                 if (array_key_exists($key, $this->keys)) {
                     break;
                 }
-                if ($int === 0) {
-                    break;
-                }
                 if (array_key_exists($key_square, $this->max_value_of_sequence)) {
-                    // Ubah value dari argument $oldkey dengan
-                    // penjelasab sbb.
-                    //
-                    // Pada kasus.
-                    // ```
-                    // aa[] = 00
-                    // aa[] = 11
-                    // aa[] = 22
-                    // ```
-                    // $config->delData('aa[2]');
-                    // $config->setData('aa[2]', '...');
-                    // mengakibatkan menjadi
-                    // ```
-                    // aa[] = 11
-                    // aa[] = 22
-                    // aa[2] = ...
-                    // ```
-                    // Oleh karena itu, jika key yang diset adalah
-                    // key terakhir, maka ubah oldkey yang akan ditempatkan
-                    // di segman.
-                    // sehingga segmen yang terbentuk nantinya seperti ini.
-                    // ```
-                    // aa[] = 11
-                    // aa[] = 22
-                    // aa[] = ...
-                    $current_max_value = ArrayHelper::getHighestIndexedKey($this->data($key_parent));
+                    $array = ($key_parent === '') ? (array) $this->data : $this->data($key_parent);
+                    $current_max_value = ArrayHelper::getHighestIndexedKey($array);
                     if ($int === ++$current_max_value) {
+                        $old_key = $key_square;
+                        break;
+                    }
+                }
+                else {
+                    if ($int === 0) {
                         $old_key = $key_square;
                         break;
                     }
@@ -803,15 +808,16 @@ class INI extends ParseINI implements FormatInterface
                 $this->convert_sequence_to_mapping[$key_square] = true;
             }
             while (false);
+
             // Update max value.
             if (array_key_exists($key_square, $this->max_value_of_sequence)) {
                 $current_max_value = $this->max_value_of_sequence[$key_square];
-                if ($key > $current_max_value) {
-                    $this->max_value_of_sequence[$key_square] = $key;
+                if ($int > $current_max_value) {
+                    $this->max_value_of_sequence[$key_square] = $int;
                 }
             }
             else {
-                $this->max_value_of_sequence[$key_square] = $key;
+                $this->max_value_of_sequence[$key_square] = $int;
             }
         }
     }
@@ -1011,7 +1017,8 @@ class INI extends ParseINI implements FormatInterface
         if ($key_parent === '') {
             // Ini berarti self::setData('[]', '...');
             if (array_key_exists('[]', $this->max_value_of_sequence)) {
-                $array = ArrayHelper::filterKeyInteger($this->data);
+                // Default value dari ParseINI::$data adalah null, gunakan magic.
+                $array = ArrayHelper::filterKeyInteger((array) $this->data);
                 $line = null;
                 foreach ($array as $key => $value) {
                     if ($info = $this->keys[$key]) {
@@ -1027,8 +1034,7 @@ class INI extends ParseINI implements FormatInterface
                 }
             }
         }
-        else {
-            $children = $this->getData($key_parent);
+        elseif ($children = $this->getData($key_parent)) {
             $array = ArrayHelper::dimensionalSimplify($children);
             $line = null;
             foreach ($array as $key => $value) {

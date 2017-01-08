@@ -4,5 +4,6 @@ test*
 composer.phar
 composer.lock
 TODO.md
+example/*/test
 example/*/o
 example/*/my-configuration.*

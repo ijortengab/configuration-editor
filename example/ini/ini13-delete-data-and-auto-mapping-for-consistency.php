@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Example: Create Simple Data.
+ * Example: Delete Data and Auto Mapping for Consistency.
  *
  * Attention: Run ```composer install``` first before execute this file.
  * @see: example/README.md

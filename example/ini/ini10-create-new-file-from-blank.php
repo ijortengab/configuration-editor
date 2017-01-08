@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Example: Create Simple Data.
+ * Example: Create New File from Blank.
  *
  * Attention: Run ```composer install``` first before execute this file.
  * @see: example/README.md

@@ -20,10 +20,10 @@ $from_path = __DIR__ . '/example01.ini';
 $config = ConfigurationEditor::load($from_path);
 
 // Lets see current content.
-var_dump((string) $config, SUBJECT | COMMENT | LINE | LINE);
+var_dump((string) $config, SUBJECT | COMMENT | LINE);
 
 // Lets see current data.
-var_dump($config->getData(), SUBJECT | COMMENT | LINE | LINE);
+var_dump($config->getData(), SUBJECT | COMMENT | LINE);
 
 /**
  * Line: 23

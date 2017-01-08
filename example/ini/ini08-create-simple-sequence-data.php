@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Example: Create Sequence Data.
+ * Example: Create Simple Sequence Data.
  *
  * Attention: Run ```composer install``` first before execute this file.
  * @see: example/README.md
