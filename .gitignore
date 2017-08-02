@@ -7,3 +7,7 @@ TODO.md
 example/*/test
 example/*/o
 example/*/my-configuration.*
+# Backup
+src/ConfigurationEditor/Formats/YAML.php~
+# Temporary
+example/yml/

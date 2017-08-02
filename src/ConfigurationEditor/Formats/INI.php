@@ -71,20 +71,20 @@ class INI extends ParseINI implements FormatInterface
      * INI;
      * ```
      * Pada contoh diatas, maka nilai dari property ini
-     * setelah dilakukan new instance adalah:
+     * sebelum dijalankan method self::setData() adalah:
      * ```
      * $this->max_value_of_sequence = [
      *     'aa[]' => 1,
-     *     'bb[]' => 2,
+     *     'bb[]' => 1,
      *     'cc[]' => 0,
      * ];
      * ```
-     * dan setelah dijalankan method ::setData, nilai dari property ini
-     * adalah
+     * dan setelah dijalankan method self::setData(),
+     * nilai dari property ini
      * ```
      * $this->max_value_of_sequence = [
      *     'aa[]' => 2,
-     *     'bb[]' => 2,
+     *     'bb[]' => 1,
      *     'cc[]' => 0,
      * ];
      * ```
@@ -380,7 +380,7 @@ class INI extends ParseINI implements FormatInterface
         $this->last_line = 0;
         $this->segmen = [];
         $this->keys = [];
-        $this->data = [];
+        $this->data = null;
     }
 
     /**
@@ -733,7 +733,7 @@ class INI extends ParseINI implements FormatInterface
                     $int = $this->max_value_of_sequence[$key_square] + 1;
                 }
                 $key = $int;
-                empty($key_parent) or $key = $key_parent . '[' . $c . ']';
+                empty($key_parent) or $key = $key_parent . '[' . $int . ']';
                 break;
 
             case 'numeric':
